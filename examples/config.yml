@@ -1,0 +1,41 @@
+targets:
+  left:
+    name: old
+    base_url: https://httpbin.org
+    default_headers: {}
+  right:
+    name: new
+    base_url: https://httpbin.org
+    default_headers: {}
+
+request_ignores:
+  headers: [authorization, user-agent, accept-encoding, content-length, host]
+  query_params: [timestamp, nonce, _]
+  body_json_paths: []
+
+response_ignores:
+  headers: [date, server, cf-ray, set-cookie]
+  body_json_paths: []
+
+deduplication:
+  strategy: method_path_query
+  include_body_for: [POST, PUT, PATCH]
+  query_param_order_insensitive: true
+
+log_input:
+  format: auto
+  mapping:
+    method: [method, http_method]
+    url: [url, request.url, uri]
+    path: [path, request.path]
+    headers: [headers, request.headers]
+    query: [query, request.query]
+    body: [body, request.body, payload]
+
+execution:
+  concurrency: 8
+  timeout_seconds: 20
+  verify_tls: true
+  retries: 0
+  backoff_seconds: 0.1
+

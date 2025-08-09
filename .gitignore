@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+
+# IDE / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Artifacts
+artifacts/
+logs/*.log
+
+# Local logs (keep sample paths outside repo)
+logs/requests.jsonl
+logs/requests.json
+

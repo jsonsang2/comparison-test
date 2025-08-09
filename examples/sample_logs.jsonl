@@ -1,0 +1,4 @@
+{"method":"GET","url":"https://httpbin.org/get?foo=1&bar=2","headers":{"Authorization":"Bearer abc","User-Agent":"curl/7.64"}}
+{"method":"GET","url":"https://httpbin.org/get?foo=1&bar=2&_=${now}","headers":{"Authorization":"Bearer xyz"}}
+{"method":"POST","url":"https://httpbin.org/post","headers":{"Content-Type":"application/json"},"body":{"hello":"world","ts":123}}
+

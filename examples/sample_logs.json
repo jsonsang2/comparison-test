@@ -1,0 +1,30 @@
+[
+  {
+    "method": "GET",
+    "request": {
+      "endpoint": "https://httpbin.org",
+      "path": "/get",
+      "parameter": {"foo": "1", "bar": "2"},
+      "headers": {"Content-Type": "application/json", "x-app-id": "abcdef"}
+    },
+    "response": {
+      "headers": {"Content-Type": "application/json"},
+      "body": {"ok": true}
+    }
+  },
+  {
+    "method": "POST",
+    "request": {
+      "endpoint": "https://httpbin.org",
+      "path": "/post",
+      "parameter": {},
+      "headers": {"Content-Type": "application/json"},
+      "body": {"name": "alice"}
+    },
+    "response": {
+      "headers": {"Content-Type": "application/json"},
+      "body": {"ok": true}
+    }
+  }
+]
+
