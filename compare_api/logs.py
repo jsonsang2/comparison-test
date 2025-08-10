@@ -15,8 +15,12 @@ def _get_first(obj: Dict[str, Any], paths: List[str]) -> Any:
             for part in parts:
                 if current is None:
                     break
-                current = current.get(part)
-            if current is not None:
+                if isinstance(current, dict):
+                    current = current.get(part)
+                else:
+                    current = None
+                    break
+            if current is not None and current != {}:  # Skip empty dicts too
                 return current
         except AttributeError:
             # Not a dict somewhere along the way
@@ -197,7 +201,7 @@ def compute_signature(
         (cfg.get("deduplication", {}).get("include_body_for", []) or [])
     )
     key_parts: List[str] = [method.upper(), path]
-    if strategy == "method_path_query":
+    if strategy in ["method_path_query", "path_grouped"]:
         from json import dumps
 
         normalized_query = normalize_query(query)
@@ -217,7 +221,22 @@ def extract_testcases(
 ) -> List[Dict[str, Any]]:
     mapping = cfg.get("log_input", {}).get("mapping", {})
     req_ign = cfg.get("request_ignores", {})
+    dedup_cfg = cfg.get("deduplication", {})
+    strategy = dedup_cfg.get("strategy", "method_path_query")
 
+    if strategy == "path_grouped":
+        return _extract_path_grouped_testcases(raw_logs, cfg)
+    else:
+        return _extract_standard_testcases(raw_logs, cfg)
+
+
+def _extract_standard_testcases(
+    raw_logs: List[Dict[str, Any]], cfg: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Extract test cases using the original deduplication strategy."""
+    mapping = cfg.get("log_input", {}).get("mapping", {})
+    req_ign = cfg.get("request_ignores", {})
+    
     seen: set[str] = set()
     cases: List[Dict[str, Any]] = []
 
@@ -226,7 +245,7 @@ def extract_testcases(
         url = _get_first(entry, mapping.get("url", ["url"]))
         path = _get_first(entry, mapping.get("path", ["path"]))
         headers = _get_first(entry, mapping.get("headers", ["headers"])) or {}
-        query = _get_first(entry, mapping.get("query", ["query"])) or {}
+        query = _get_first(entry, mapping.get("query", ["query", "request.query", "parameter"])) or {}
         body = _get_first(entry, mapping.get("body", ["body"]))
 
         if url and not path:
@@ -266,5 +285,113 @@ def extract_testcases(
     # Assign IDs
     for idx, c in enumerate(cases, start=1):
         c["id"] = idx
+    return cases
+
+
+def _extract_path_grouped_testcases(
+    raw_logs: List[Dict[str, Any]], cfg: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Extract test cases grouped by path, with detailed parameter combinations within each path."""
+    mapping = cfg.get("log_input", {}).get("mapping", {})
+    req_ign = cfg.get("request_ignores", {})
+    
+    print(f"DEBUG: Processing {len(raw_logs)} log entries")
+    print(f"DEBUG: Mapping config: {mapping}")
+    
+    # Group by path first
+    path_groups: Dict[str, List[Dict[str, Any]]] = {}
+    
+    for i, entry in enumerate(raw_logs):
+        method = _get_first(entry, mapping.get("method", ["method"])) or "GET"
+        url = _get_first(entry, mapping.get("url", ["url"]))
+        path = _get_first(entry, mapping.get("path", ["path"]))
+        headers = _get_first(entry, mapping.get("headers", ["headers"])) or {}
+        query = _get_first(entry, mapping.get("query", ["query", "request.query", "parameter"])) or {}
+        body = _get_first(entry, mapping.get("body", ["body"]))
+
+        print(f"DEBUG: Entry {i}: method={method}, path={path}, query={query}")
+
+        if url and not path:
+            path_from_url, query_from_url = _parse_url(url)
+            path = path_from_url
+            # query merge: explicit query takes precedence
+            merged_query = {**query_from_url, **(query or {})}
+            query = merged_query
+        if not path:
+            # cannot form request target
+            continue
+
+        norm_headers = _normalize_headers(headers)
+        norm_headers = filter_dict(norm_headers, req_ign.get("headers", []))
+
+        # Filter query params
+        query = normalize_query(query)
+        query = filter_dict(query, req_ign.get("query_params", []))
+
+        print(f"DEBUG: After filtering: query={query}")
+
+        # Create a unique key for this specific request within the path
+        request_key = compute_signature(method, path, query, body, cfg)
+        
+        print(f"DEBUG: Request key: {request_key}")
+        
+        if path not in path_groups:
+            path_groups[path] = []
+        
+        # Check if this exact request already exists in this path group
+        existing_keys = {req["request_key"] for req in path_groups[path]}
+        if request_key not in existing_keys:
+            path_groups[path].append({
+                "method": method.upper(),
+                "path": path,
+                "query": query,
+                "headers": norm_headers,
+                "body": body,
+                "request_key": request_key,
+            })
+            print(f"DEBUG: Added to path group {path}")
+        else:
+            print(f"DEBUG: Skipped duplicate request key: {request_key}")
+
+    print(f"DEBUG: Final path groups: {list(path_groups.keys())}")
+    for path, cases in path_groups.items():
+        print(f"DEBUG: Path {path} has {len(cases)} cases")
+
+    # Convert to test cases with hierarchical structure
+    cases: List[Dict[str, Any]] = []
+    case_id = 1
+    
+    for path in sorted(path_groups.keys()):
+        path_cases = path_groups[path]
+        
+        # Create main test case for this path
+        main_case = {
+            "id": case_id,
+            "type": "path_group",
+            "method": path_cases[0]["method"],  # All should have same method for same path
+            "path": path,
+            "query": {},  # Empty for main case
+            "headers": path_cases[0]["headers"],  # Use first case headers
+            "body": None,
+            "sub_cases": []
+        }
+        
+        # Create sub-cases for each parameter combination
+        for i, path_case in enumerate(path_cases):
+            sub_case = {
+                "id": f"{case_id}.{i+1}",
+                "type": "parameter_combination",
+                "method": path_case["method"],
+                "path": path_case["path"],
+                "query": path_case["query"],
+                "headers": path_case["headers"],
+                "body": path_case["body"],
+                "parent_id": case_id
+            }
+            main_case["sub_cases"].append(sub_case)
+        
+        cases.append(main_case)
+        case_id += 1
+
     return cases
 

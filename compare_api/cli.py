@@ -50,34 +50,34 @@ def cmd_extract(args: argparse.Namespace) -> int:
 def _run_case(case: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     targets = cfg["targets"]
     exec_cfg = cfg.get("execution", {})
-    req_ign = cfg.get("request_ignores", {})
-    resp_ign = cfg.get("response_ignores", {})
-
-    left_headers = prepare_headers(case.get("headers", {}), targets["left"].get("default_headers", {}))
-    right_headers = prepare_headers(case.get("headers", {}), targets["right"].get("default_headers", {}))
-
+    
+    # Handle path-grouped test cases
+    if case.get("type") == "path_group":
+        return _run_path_group_case(case, cfg)
+    
+    # Original single test case logic
     left = send_request(
         base_url=targets["left"]["base_url"],
         method=case["method"],
         path=case["path"],
         query=case.get("query", {}),
-        headers=left_headers,
+        headers=case.get("headers", {}),
         body=case.get("body"),
-        timeout_seconds=exec_cfg.get("timeout_seconds", 30),
+        timeout_seconds=exec_cfg.get("timeout_seconds", 20),
         verify_tls=exec_cfg.get("verify_tls", True),
     )
-
     right = send_request(
         base_url=targets["right"]["base_url"],
         method=case["method"],
         path=case["path"],
         query=case.get("query", {}),
-        headers=right_headers,
+        headers=case.get("headers", {}),
         body=case.get("body"),
-        timeout_seconds=exec_cfg.get("timeout_seconds", 30),
+        timeout_seconds=exec_cfg.get("timeout_seconds", 20),
         verify_tls=exec_cfg.get("verify_tls", True),
     )
 
+    resp_ign = cfg.get("response_ignores", {})
     status_cmp = compare_status(left["status"], right["status"])
     headers_cmp = compare_headers(left["headers"], right["headers"], resp_ign.get("headers", []))
 
@@ -89,6 +89,7 @@ def _run_case(case: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "id": case["id"],
+        "type": case.get("type", "single"),
         "request": {
             "method": case["method"],
             "path": case["path"],
@@ -104,6 +105,59 @@ def _run_case(case: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
             "bodies": bodies_cmp,
             "equal": equal,
         },
+    }
+
+
+def _run_path_group_case(case: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Run a path-grouped test case with all its parameter combinations."""
+    targets = cfg["targets"]
+    exec_cfg = cfg.get("execution", {})
+    
+    # Run the main path test case (without specific parameters)
+    main_result = _run_case({
+        "id": case["id"],
+        "method": case["method"],
+        "path": case["path"],
+        "query": {},
+        "headers": case.get("headers", {}),
+        "body": None,
+    }, cfg)
+    
+    # Run all sub-cases for parameter combinations
+    sub_results = []
+    for sub_case in case.get("sub_cases", []):
+        sub_result = _run_case(sub_case, cfg)
+        sub_results.append(sub_result)
+    
+    # Aggregate results
+    all_equal = main_result["compare"]["equal"] and all(
+        sub["compare"]["equal"] for sub in sub_results
+    )
+    
+    return {
+        "id": case["id"],
+        "type": "path_group",
+        "request": {
+            "method": case["method"],
+            "path": case["path"],
+            "query": {},
+            "headers": case.get("headers", {}),
+            "body": None,
+        },
+        "left": main_result["left"],
+        "right": main_result["right"],
+        "compare": {
+            "status": main_result["compare"]["status"],
+            "headers": main_result["compare"]["headers"],
+            "bodies": main_result["compare"]["bodies"],
+            "equal": all_equal,
+        },
+        "sub_cases": sub_results,
+        "summary": {
+            "total_sub_cases": len(sub_results),
+            "passed_sub_cases": sum(1 for sub in sub_results if sub["compare"]["equal"]),
+            "failed_sub_cases": sum(1 for sub in sub_results if not sub["compare"]["equal"]),
+        }
     }
 
 

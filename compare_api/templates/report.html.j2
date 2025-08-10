@@ -36,6 +36,84 @@
     .header-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
     .btn { border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
     .btn:hover { background: #f9fafb; }
+
+    /* New styles for path group summary and sub-cases */
+    .path-group-summary {
+      background: #f0f9eb; /* Light green background */
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #e5e7eb;
+    }
+    .sub-cases-summary {
+      display: flex;
+      gap: 12px;
+      font-size: 14px;
+      color: #374151;
+    }
+    .sub-case-count, .sub-case-passed, .sub-case-failed {
+      font-weight: 600;
+    }
+    .sub-case {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      background: #f9fafb;
+    }
+    .sub-case-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .sub-case-body {
+      padding-top: 8px;
+    }
+    .sub-case-status {
+      font-size: 14px;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .diff-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .diff-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      color: #374151;
+    }
+    .diff-table {
+      width: 100%;
+      font-size: 12px;
+    }
+    .diff-table th, .diff-table td {
+      border: 1px solid #e5e7eb;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .diff-body pre {
+      background: #0b1021;
+      color: #e5e7eb;
+      padding: 12px;
+      border-radius: 6px;
+      overflow: auto;
+      font-size: 12px;
+    }
+    .diff-body code {
+      white-space: pre-wrap;
+    }
+    .query-params {
+      font-size: 12px;
+      color: #6b7280;
+      margin-left: 8px;
+    }
   </style>
   <script>
     function toggleAll(open) {
@@ -75,12 +153,95 @@
       <div>
         <span class="tag {{ 'pass' if r.compare.equal else 'fail' }}">{{ 'PASS' if r.compare.equal else 'FAIL' }}</span>
         <strong>#{{ r.id }} {{ r.request.method }} {{ r.request.path }}</strong>
+        {% if r.type == 'path_group' %}
+          <span class="path-group-info">(Path Group: {{ r.summary.total_sub_cases }} parameter combinations)</span>
+        {% endif %}
       </div>
-      <div>Status: {{ r.left.status }} vs {{ r.right.status }} | Time: {{ r.left.elapsed_ms }}ms vs {{ r.right.elapsed_ms }}ms</div>
+      <div>
+        Status: {{ r.left.status }} vs {{ r.right.status }} | Time: {{ r.left.elapsed_ms }}ms vs {{ r.right.elapsed_ms }}ms
+        {% if r.type == 'path_group' %}
+          | Sub-cases: {{ r.summary.passed_sub_cases }}/{{ r.summary.total_sub_cases }} passed
+        {% endif %}
+      </div>
     </div>
     <div class="case-body">
       {% if r.error %}
         <div class="bad">Error: {{ r.error }}</div>
+      {% endif %}
+
+      {% if r.type == 'path_group' %}
+        <!-- Path Group Summary -->
+        <div class="path-group-summary">
+          <h4>Path Group Summary</h4>
+          <div class="sub-cases-summary">
+            <span class="sub-case-count">Total Parameter Combinations: {{ r.summary.total_sub_cases }}</span>
+            <span class="sub-case-passed">Passed: {{ r.summary.passed_sub_cases }}</span>
+            <span class="sub-case-failed">Failed: {{ r.summary.failed_sub_cases }}</span>
+          </div>
+        </div>
+
+        <!-- Sub-cases for parameter combinations -->
+        <details open>
+          <summary>Parameter Combination Details</summary>
+          {% for sub_case in r.sub_cases %}
+            <div class="sub-case">
+              <div class="sub-case-header">
+                <span class="tag {{ 'pass' if sub_case.compare.equal else 'fail' }}">{{ 'PASS' if sub_case.compare.equal else 'FAIL' }}</span>
+                <strong>{{ sub_case.id }}: {{ sub_case.request.method }} {{ sub_case.request.path }}</strong>
+                {% if sub_case.request.query %}
+                  <span class="query-params">with params: {{ sub_case.request.query | tojson }}</span>
+                {% endif %}
+              </div>
+              <div class="sub-case-body">
+                <div class="sub-case-status">
+                  Status: {{ sub_case.left.status }} vs {{ sub_case.right.status }} | 
+                  Time: {{ sub_case.left.elapsed_ms }}ms vs {{ sub_case.right.elapsed_ms }}ms
+                </div>
+                
+                {% if not sub_case.compare.equal %}
+                  <details>
+                    <summary>Differences</summary>
+                    {% if not sub_case.compare.status.equal %}
+                      <div class="diff-section">
+                        <h5>Status Difference</h5>
+                        <div class="diff-item">
+                          <span class="left">Left: {{ sub_case.left.status }}</span>
+                          <span class="right">Right: {{ sub_case.right.status }}</span>
+                        </div>
+                      </div>
+                    {% endif %}
+                    
+                    {% if not sub_case.compare.headers.equal %}
+                      <div class="diff-section">
+                        <h5>Header Differences</h5>
+                        <table class="diff-table">
+                          <tr><th>Header</th><th>Left</th><th>Right</th></tr>
+                          {% for d in sub_case.compare.headers.diffs %}
+                            <tr><td>{{ d.key }}</td><td>{{ d.left }}</td><td>{{ d.right }}</td></tr>
+                          {% endfor %}
+                        </table>
+                      </div>
+                    {% endif %}
+                    
+                    {% if not sub_case.compare.bodies.equal %}
+                      <div class="diff-section">
+                        <h5>Body Differences</h5>
+                        {% if sub_case.compare.bodies.mode == 'json' %}
+                          <pre class="diff-body"><code>{{ sub_case.compare.bodies.diff | tojson(indent=2) }}</code></pre>
+                        {% else %}
+                          <div class="diff-body">
+                            <div class="left">Left: {{ sub_case.compare.bodies.left_text }}</div>
+                            <div class="right">Right: {{ sub_case.compare.bodies.right_text }}</div>
+                          </div>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  </details>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </details>
       {% endif %}
 
       <details>

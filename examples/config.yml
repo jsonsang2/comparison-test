@@ -18,7 +18,7 @@ response_ignores:
   body_json_paths: []
 
 deduplication:
-  strategy: method_path_query
+  strategy: path_grouped  # Options: method_path_query, path_grouped
   include_body_for: [POST, PUT, PATCH]
   query_param_order_insensitive: true
 
@@ -29,7 +29,7 @@ log_input:
     url: [url, request.url, uri]
     path: [path, request.path]
     headers: [headers, request.headers]
-    query: [query, request.query]
+    query: [query, request.query, request.parameter]
     body: [body, request.body, payload]
 
 execution:
