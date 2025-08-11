@@ -56,6 +56,47 @@ def _parse_url(url: str) -> Tuple[str, Dict[str, Any]]:
     return path, query
 
 
+def _ensure_content_type_from_mime(
+    raw_log_entry: Dict[str, Any],
+    headers: Optional[Dict[str, Any]],
+    mapping: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Ensure request headers include Content-Type from http.request.mime_type when missing.
+
+    - Does nothing if headers already contain a Content-Type (any casing).
+    - Looks for mime type in common paths: http.request.mime_type, request.mime_type, mime_type.
+    - Also checks mapping configuration for custom mime_type paths.
+    """
+    headers = dict(headers or {})
+    # Check if Content-Type is already provided (case-insensitive)
+    for k in list(headers.keys()):
+        if str(k).lower() == "content-type":
+            return headers
+
+    # First try mapping configuration if provided
+    if mapping and "mime_type" in mapping:
+        mime_type = _get_first(raw_log_entry, mapping["mime_type"])
+        if isinstance(mime_type, str) and mime_type.strip():
+            headers["Content-Type"] = mime_type.strip()
+            return headers
+
+    # Fallback to common paths
+    mime_type = _get_first(
+        raw_log_entry,
+        [
+            "http.request.mime_type",
+            "http.request.content_type",
+            "request.mime_type",
+            "request.content_type",
+            "mime_type",
+            "content_type",
+        ],
+    )
+    if isinstance(mime_type, str) and mime_type.strip():
+        headers["Content-Type"] = mime_type.strip()
+    return headers
+
+
 def load_logs(path: str, fmt: str = "auto") -> List[Dict[str, Any]]:
     p = Path(path)
     data: List[Dict[str, Any]] = []
@@ -189,6 +230,33 @@ def normalize_query(query: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def normalize_body(body: Any) -> Any:
+    """Normalize request body by preserving original content and only trimming whitespace."""
+    if body is None:
+        return body
+    
+    if isinstance(body, str):
+        # Only trim leading/trailing whitespace, preserve all other content including newlines
+        return body.strip()
+    
+    return body
+
+
+def escape_xml_for_html(xml_content: str) -> str:
+    """Convert XML content to HTML-safe format using HTML entities."""
+    if not xml_content:
+        return xml_content
+    
+    # Replace XML special characters with HTML entities
+    escaped = xml_content.replace('&', '&amp;')  # Must be first
+    escaped = escaped.replace('<', '&lt;')
+    escaped = escaped.replace('>', '&gt;')
+    escaped = escaped.replace('"', '&quot;')
+    escaped = escaped.replace("'", '&#39;')
+    
+    return escaped
+
+
 def compute_signature(
     method: str,
     path: str,
@@ -245,8 +313,10 @@ def _extract_standard_testcases(
         url = _get_first(entry, mapping.get("url", ["url"]))
         path = _get_first(entry, mapping.get("path", ["path"]))
         headers = _get_first(entry, mapping.get("headers", ["headers"])) or {}
+        headers = _ensure_content_type_from_mime(entry, headers, mapping)
         query = _get_first(entry, mapping.get("query", ["query", "request.query", "parameter"])) or {}
         body = _get_first(entry, mapping.get("body", ["body"]))
+        body = normalize_body(body)
 
         if url and not path:
             path_from_url, query_from_url = _parse_url(url)
@@ -306,8 +376,10 @@ def _extract_path_grouped_testcases(
         url = _get_first(entry, mapping.get("url", ["url"]))
         path = _get_first(entry, mapping.get("path", ["path"]))
         headers = _get_first(entry, mapping.get("headers", ["headers"])) or {}
+        headers = _ensure_content_type_from_mime(entry, headers, mapping)
         query = _get_first(entry, mapping.get("query", ["query", "request.query", "parameter"])) or {}
         body = _get_first(entry, mapping.get("body", ["body"]))
+        body = normalize_body(body)
 
         print(f"DEBUG: Entry {i}: method={method}, path={path}, query={query}")
 

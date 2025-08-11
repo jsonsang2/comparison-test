@@ -1,11 +1,11 @@
 targets:
   left:
     name: old
-    base_url: https://httpbin.org
+    base_url: https://apigateway-sas-eucentral1.samsungospdev.com
     default_headers: {}
   right:
     name: new
-    base_url: https://httpbin.org
+    base_url: https://apigateway-sas-eucentral1.samsungospdev.com
     default_headers: {}
 
 request_ignores:
@@ -14,7 +14,7 @@ request_ignores:
   body_json_paths: []
 
 response_ignores:
-  headers: [date, server, cf-ray, set-cookie]
+  headers: [date, server, cf-ray, set-cookie, x-amz-cf-id, via]
   body_json_paths: []
 
 deduplication:
@@ -23,14 +23,15 @@ deduplication:
   query_param_order_insensitive: true
 
 log_input:
-  format: auto
+  format: json
   mapping:
-    method: [method, http_method]
-    url: [url, request.url, uri]
-    path: [path, request.path]
+    method: [http.request.method]
+    url: [url.domain]
+    path: [url.path]
     headers: [headers, request.headers]
-    query: [query, request.query, request.parameter]
-    body: [body, request.body, payload]
+    query: [url.query, query, request.query, request.parameter]
+    body: [http.request.body.content, request.body, payload]
+    mime_type: [http.request.mime_type, http.request.content_type, request.mime_type, request.content_type]
 
 execution:
   concurrency: 8

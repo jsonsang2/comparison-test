@@ -113,46 +113,23 @@ def _run_path_group_case(case: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str,
     targets = cfg["targets"]
     exec_cfg = cfg.get("execution", {})
     
-    # Run the main path test case (without specific parameters)
-    main_result = _run_case({
-        "id": case["id"],
-        "method": case["method"],
-        "path": case["path"],
-        "query": {},
-        "headers": case.get("headers", {}),
-        "body": None,
-    }, cfg)
-    
-    # Run all sub-cases for parameter combinations
+    # Run all sub-cases for parameter combinations (these contain the actual request bodies)
     sub_results = []
     for sub_case in case.get("sub_cases", []):
         sub_result = _run_case(sub_case, cfg)
         sub_results.append(sub_result)
     
     # Aggregate results
-    all_equal = main_result["compare"]["equal"] and all(
-        sub["compare"]["equal"] for sub in sub_results
-    )
+    all_equal = all(sub["compare"]["equal"] for sub in sub_results)
     
     return {
         "id": case["id"],
         "type": "path_group",
-        "request": {
-            "method": case["method"],
-            "path": case["path"],
-            "query": {},
-            "headers": case.get("headers", {}),
-            "body": None,
-        },
-        "left": main_result["left"],
-        "right": main_result["right"],
+        "request": case,
+        "sub_cases": sub_results,
         "compare": {
-            "status": main_result["compare"]["status"],
-            "headers": main_result["compare"]["headers"],
-            "bodies": main_result["compare"]["bodies"],
             "equal": all_equal,
         },
-        "sub_cases": sub_results,
         "summary": {
             "total_sub_cases": len(sub_results),
             "passed_sub_cases": sum(1 for sub in sub_results if sub["compare"]["equal"]),
