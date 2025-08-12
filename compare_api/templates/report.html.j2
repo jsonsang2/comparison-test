@@ -294,7 +294,7 @@
                           </div>
                           <div class="response-body">
                             <h6>Response Body:</h6>
-                            <pre><code>{% if sub_case.left.body_text %}{{ sub_case.left.body_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif sub_case.left.body_json %}{{ sub_case.left.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
+                            <pre><code>{% if sub_case.left.body_text %}{{ sub_case.left.body_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif sub_case.left.body_json %}{{ sub_case.left.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
                           </div>
                         </div>
                       </div>
@@ -307,7 +307,7 @@
                           </div>
                           <div class="response-body">
                             <h6>Response Body:</h6>
-                            <pre><code>{% if sub_case.right.body_text %}{{ sub_case.right.body_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif sub_case.right.body_json %}{{ sub_case.right.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
+                            <pre><code>{% if sub_case.right.body_text %}{{ sub_case.right.body_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif sub_case.right.body_json %}{{ sub_case.right.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
                           </div>
                         </div>
                       </div>
@@ -344,10 +344,16 @@
                         <h5>Body Differences</h5>
                         {% if sub_case.compare.bodies.mode == 'json' %}
                           <pre class="diff-body"><code>{{ sub_case.compare.bodies.diff | tojson(indent=2) }}</code></pre>
+                        {% elif sub_case.compare.bodies.mode == 'xml' %}
+                          <div class="diff-body">
+                            <h6>XML responses normalized for comparison</h6>
+                            <div class="left">Left: {{ sub_case.compare.bodies.left_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</div>
+                            <div class="right">Right: {{ sub_case.compare.bodies.right_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</div>
+                          </div>
                         {% else %}
                           <div class="diff-body">
-                            <div class="left">Left: {{ sub_case.compare.bodies.left_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</div>
-                            <div class="right">Right: {{ sub_case.compare.bodies.right_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</div>
+                            <div class="left">Left: {{ sub_case.compare.bodies.left_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</div>
+                            <div class="right">Right: {{ sub_case.compare.bodies.right_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</div>
                           </div>
                         {% endif %}
                       </div>
@@ -373,7 +379,7 @@
               </div>
               <div class="response-body">
                 <h5>Response Body:</h5>
-                <pre><code>{% if r.left.body_text %}{{ r.left.body_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif r.left.body_json %}{{ r.left.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
+                <pre><code>{% if r.left.body_text %}{{ r.left.body_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif r.left.body_json %}{{ r.left.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
               </div>
             </div>
           </div>
@@ -386,7 +392,7 @@
               </div>
               <div class="response-body">
                 <h5>Response Body:</h5>
-                <pre><code>{% if r.right.body_text %}{{ r.right.body_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif r.right.body_json %}{{ r.right.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
+                <pre><code>{% if r.right.body_text %}{{ r.right.body_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}{% elif r.right.body_json %}{{ r.right.body_json | tojson(indent=2) }}{% else %}No response body{% endif %}</code></pre>
               </div>
             </div>
           </div>
@@ -428,6 +434,22 @@
                 <pre><code>{{ r.compare.bodies.right_pretty | safe }}</code></pre>
               </div>
             </div>
+          {% elif r.compare.bodies.mode == 'xml' %}
+            {% if r.compare.bodies.equal %}
+              <div class="ok">XML bodies are functionally equal (normalized for comparison)</div>
+            {% else %}
+              <h4>XML Comparison (normalized)</h4>
+              <div class="grid">
+                <div>
+                  <h4>Left</h4>
+                  <pre><code>{{ r.compare.bodies.left_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</code></pre>
+                </div>
+                <div>
+                  <h4>Right</h4>
+                  <pre><code>{{ r.compare.bodies.right_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</code></pre>
+                </div>
+              </div>
+            {% endif %}
           {% else %}
             {% if r.compare.bodies.equal %}
               <div class="ok">Bodies are equal</div>
@@ -435,11 +457,11 @@
               <div class="grid">
                 <div>
                   <h4>Left</h4>
-                  <pre><code>{{ r.compare.bodies.left_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</code></pre>
+                  <pre><code>{{ r.compare.bodies.left_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</code></pre>
                 </div>
                 <div>
                   <h4>Right</h4>
-                  <pre><code>{{ r.compare.bodies.right_text | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</code></pre>
+                  <pre><code>{{ r.compare.bodies.right_text | format_xml | replace('&', '&amp;') | replace('<', '&lt;') | replace('>', '&gt;') | replace('"', '&quot;') | replace("'", '&#39;') }}</code></pre>
                 </div>
               </div>
             {% endif %}

@@ -1,11 +1,11 @@
 targets:
   left:
     name: old
-    base_url: https://apigateway-sas-eucentral1.samsungospdev.com
+    base_url: https://test.com
     default_headers: {}
   right:
     name: new
-    base_url: https://apigateway-sas-eucentral1.samsungospdev.com
+    base_url: https:/testb.com
     default_headers: {}
 
 request_ignores:

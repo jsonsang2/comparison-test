@@ -7,6 +7,8 @@ JSON/JSONL 로그에서 API 요청 패턴을 추출하여 두 개의 다른 엔�
 ### 🔍 로그 분석 및 패턴 추출
 - **다양한 로그 형식 지원**: JSON Lines, JSON 배열, 들여쓰기된 다중 JSON
 - **유연한 매핑**: `request.path`, `request.parameter`, `request.headers` 등 중첩된 구조 지원
+- **MIME Type 자동 추출**: 로그에서 `http.request.mime_type` 값을 자동으로 Content-Type 헤더로 설정
+- **요청 Body 정규화**: 공백 정리 및 원본 내용 보존 (XML, JSON 등)
 - **중복 제거 전략**: 
   - `method_path_query`: 전통적인 방식 (메서드+경로+쿼리 기준)
   - `path_grouped`: **새로운 기능** - 경로별 그룹화 및 파라미터 조합별 서브 케이스
@@ -18,12 +20,16 @@ JSON/JSONL 로그에서 API 요청 패턴을 추출하여 두 개의 다른 엔�
 
 ### 📊 응답 비교
 - **상세 비교**: HTTP 상태 코드, 헤더, 응답 본문
+- **XML 정규화**: XML 응답의 인덴트, 속성 순서, 공백 차이를 정규화하여 기능적 차이만 비교
 - **무시 규칙**: 특정 헤더, 쿼리 파라미터, JSON 경로 제외 가능
 - **Diff 시각화**: HTML 리포트에서 필드별 차이점 명확하게 표시
 
 ### 📈 리포트 생성
 - **HTML 리포트**: 브라우저에서 보기 편한 형태
+- **개선된 레이아웃**: 좌우 비교를 위한 그리드 레이아웃, XML/JSON 태그 정확한 렌더링
+- **XML 예쁜 출력**: XML 응답을 자동으로 인덴트 적용하여 읽기 쉽게 포맷팅
 - **계층적 구조**: Path Group과 Sub-case를 포함한 테스트 결과
+- **요청/응답 상세 보기**: 각 테스트별 파라미터, 헤더, 본문 내용 표시
 - **JSON 결과**: 프로그래밍 방식으로 결과 처리 가능
 
 ## 빠른 시작
@@ -45,18 +51,25 @@ pip install -r requirements.txt
 ```json
 [
   {
-    "method": "GET",
-    "request": {
-      "endpoint": "https://api.example.com",
+    "http": {
+      "request": {
+        "method": "POST",
+        "mime_type": "application/xml",
+        "body": {
+          "content": "<request><param1>B</param1><param2>A</param2></request>"
+        }
+      }
+    },
+    "url": {
+      "domain": "https://api.example.com",
       "path": "/a/b/cd",
-      "parameter": {
+      "query": {
         "param1": "B",
         "param2": "A"
-      },
-      "headers": {
-        "Content-Type": "application/json",
-        "x-app-id": "abcdef"
       }
+    },
+    "headers": {
+      "x-app-id": "abcdef"
     },
     "response": { ... }
   }
@@ -102,14 +115,21 @@ python -m compare_api.cli run --refresh-from-logs
 
 ```yaml
 log_input:
+  format: json  # auto, json, jsonl
   mapping:
-    method: [method, http_method]
-    url: [url, request.url, uri]
-    path: [path, request.path]
+    method: [http.request.method, method]
+    url: [url.domain, url, request.url]
+    path: [url.path, path, request.path]
     headers: [headers, request.headers]
-    query: [query, request.query, request.parameter]  # 파라미터 추출
-    body: [body, request.body, payload]
+    query: [url.query, query, request.query, request.parameter]  # 파라미터 추출
+    body: [http.request.body.content, request.body, body, payload]
+    mime_type: [http.request.mime_type, http.request.content_type, request.mime_type, request.content_type]  # MIME type 추출
 ```
+
+**주요 매핑 경로**:
+- `http.request.mime_type`: HTTP 요청의 MIME type (자동으로 Content-Type 헤더로 설정)
+- `url.domain`, `url.path`, `url.query`: URL 구성 요소별 분리 추출
+- `http.request.body.content`: HTTP 요청 본문 내용
 
 ### 중복 제거 전략
 ```yaml
@@ -148,6 +168,10 @@ response_ignores:
   - 각 Path Group별 결과
   - Sub-case별 상세 비교
   - 필드별 diff 시각화
+  - **좌우 비교 레이아웃**: Left/Right 응답을 나란히 표시
+  - **XML/JSON 태그 정확한 렌더링**: HTML 엔티티 인코딩으로 태그가 브라우저에서 올바르게 표시
+  - **XML 자동 포맷팅**: XML 응답을 인덴트가 적용된 읽기 쉬운 형태로 표시
+  - **XML 정규화 비교**: 포맷 차이는 무시하고 기능적 차이만 표시
 
 ### JSON 결과
 - **위치**: `artifacts/results.json`
@@ -182,6 +206,27 @@ python -m compare_api.cli from-logs --config my-config.yml
 python -m compare_api.cli from-logs --logs my-logs.jsonl
 ```
 
+### XML API 비교 예시
+XML 응답을 반환하는 API의 경우, 다음과 같은 이점이 있습니다:
+
+```xml
+<!-- Left API 응답 -->
+<response><status>success</status><data id="1" name="test">
+<item>value</item></data></response>
+
+<!-- Right API 응답 (포맷팅 차이만 있음) -->
+<response>
+  <status>success</status>
+  <data name="test" id="1">
+    <item>value</item>
+  </data>
+</response>
+```
+
+- **정규화**: 위 두 XML은 포맷은 다르지만 기능적으로 동일하므로 "동일" 판정
+- **예쁜 출력**: 리포트에서 인덴트가 적용된 읽기 쉬운 형태로 표시
+- **속성 순서**: XML 속성 순서 차이는 무시됨
+
 ## 아키텍처
 
 ```
@@ -202,6 +247,11 @@ compare_api/
 - [x] Path Grouped 전략 구현
 - [x] 계층적 테스트 케이스 구조
 - [x] 파라미터 조합별 서브 케이스
+- [x] MIME type 자동 추출 및 Content-Type 헤더 설정
+- [x] 요청 Body 정규화 (공백 처리, 원본 내용 보존)
+- [x] HTML 리포트 UI 개선 (좌우 비교, XML 태그 렌더링)
+- [x] XML 응답 정규화 (인덴트, 속성 순서, 공백 차이 무시)
+- [x] XML 응답 예쁜 출력 (HTML 리포트에서 포맷팅)
 - [ ] 정규식 기반 경로/쿼리 가변성 제어
 - [ ] 샘플링/가중치 기반 케이스 선택
 - [ ] 성능 최적화
